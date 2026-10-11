@@ -5,6 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
+import { fileURLToPath } from "node:url";
 
 const here = import.meta.dirname;
 const server = path.join(here, "node_modules", "sillytavern");
@@ -66,6 +67,24 @@ if (root) {
     }
   }
 }
+
+// The server reads its image decoders as files and refuses any that sit
+// outside its own folder. Installed as a package, the decoders are its
+// neighbours in node_modules/, so every picture it was handed (an avatar, a
+// persona, a thumbnail) failed to open. Whatever the server installs as its
+// way of fetching is kept, and decoders from this app's own packages are
+// answered here before it is asked.
+const packages = fs.realpathSync(path.join(here, "node_modules")) + path.sep;
+let serverFetch = globalThis.fetch;
+const fetchWithDecoders = (input, init) => {
+  const address = typeof input === "string" ? input : input instanceof URL ? input.href : input?.url;
+  if (typeof address === "string" && address.startsWith("file:") && address.endsWith(".wasm")) {
+    const file = fs.realpathSync(fileURLToPath(address));
+    if (file.startsWith(packages)) return Promise.resolve(new Response(fs.readFileSync(file), { headers: { "content-type": "application/wasm" } }));
+  }
+  return serverFetch(input, init);
+};
+Object.defineProperty(globalThis, "fetch", { configurable: true, get: () => fetchWithDecoders, set: (next) => { serverFetch = next; } });
 
 // A reply cancelled halfway (the stop button, a closed tab) surfaces under
 // this runtime as an uncaught error from the abandoned stream. The server
