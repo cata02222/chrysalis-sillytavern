@@ -12,9 +12,9 @@ id. The program must be running: if the tool says it is not, ask the user to
 open the app's tab.
 
 - Get the token once: `app_request { route: "/csrf-token" }` answers
-  `{"token":"..."}`. Send it on every POST as
-  `headers: { "X-CSRF-Token": "<token>" }`. A `403` means it went stale: fetch
-  a new one and repeat the call.
+  `{"token":"..."}`. Send it on every POST, the ones that only read as well,
+  as `headers: { "X-CSRF-Token": "<token>" }`. A `403` means the header was
+  left out or the token went stale: fetch a new one and repeat the call.
 - Routes are POST with a `json` body unless said otherwise.
 - The open page reads its lists once. Set `reload: true` on the last call of a
   job that added, renamed or removed a character.
@@ -25,8 +25,9 @@ open the app's tab.
 
 One `Name.png` in `characters/` of the data folder. The card is stored inside
 the picture, and the file name is the character's id in every route
-(`avatar_url` or `avatar`). Never decode the picture in the shell to read the
-card: it is slow there and can hang. Ask the API.
+(`avatar_url` or `avatar`). Never open the picture to read the card, with
+`read_file` or in the shell: it is not text, and decoding it in the shell is
+slow and can hang. Ask the API.
 
 - **Which exist:** list `characters/` in the data folder with `read_file`. Do
   not call `/api/characters/all`: it returns every card in full and is cut off.

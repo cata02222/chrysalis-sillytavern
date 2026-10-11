@@ -12,9 +12,9 @@ program must be running: if the tool says it is not, ask the user to open the
 app's tab.
 
 - Get the token once: `app_request { route: "/csrf-token" }` answers
-  `{"token":"..."}`. Send it on every POST as
-  `headers: { "X-CSRF-Token": "<token>" }`. A `403` means it went stale: fetch
-  a new one and repeat the call.
+  `{"token":"..."}`. Send it on every POST, the ones that only read as well,
+  as `headers: { "X-CSRF-Token": "<token>" }`. A `403` means the header was
+  left out or the token went stale: fetch a new one and repeat the call.
 - Routes are POST with a `json` body.
 - To refresh the open page after changing files: call `/csrf-token` again with
   `reload: true`.
@@ -189,15 +189,20 @@ picking it in the list would:
      { temperature: "temp_openai", frequency_penalty: "freq_pen_openai", presence_penalty: "pres_pen_openai", top_p: "top_p_openai", top_k: "top_k_openai", top_a: "top_a_openai", min_p: "min_p_openai", repetition_penalty: "repetition_penalty_openai" } as $names
      | .oai_settings |= (reduce ($p[0] | to_entries[]) as $e (.; .[$names[$e.key] // $e.key] = $e.value))
      | .oai_settings.preset_settings_openai = "My Preset"
-   ' settings.json > /tmp/s.json && cp /tmp/s.json settings.json
+   ' settings.json > ../../settings.next.json \
+     && jq -e 'has("power_user") and has("oai_settings")' ../../settings.next.json > /dev/null && echo ready
    ```
 
-3. At once, `app_request { route: "/csrf-token", reload: true }`. The open
-   page keeps the settings in memory and writes the whole file back the next
-   time the user changes anything, which would undo step 2. Reloading makes
-   it read the file.
-4. Read the value back from `settings.json` to see that it held. If it did
-   not, the page saved in between: do steps 2 and 3 again.
+   This writes an edited copy beside the data, not over the file. Go on only
+   when it printed `ready`.
+3. In the very next call, hand the copy to the program and load the page
+   again:
+   `app_request { route: "/api/settings/save", body_file: "apps/<this app's id>/data/settings.next.json", headers: { "X-CSRF-Token": "<token>" }, reload: true }`
+   answers `{"result":"ok"}`. Never write to `settings.json` yourself: the
+   open page keeps the settings in memory and would write its old copy back
+   over the edit.
+4. In a new shell command, read the value back from `settings.json` and
+   remove the copy (`rm ../../settings.next.json`).
 
 To change one live value and nothing else, do the same four steps with a
 smaller edit, for example `.oai_settings.temp_openai = 0.8`, and make the same

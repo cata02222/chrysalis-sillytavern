@@ -16,9 +16,9 @@ program must be running: if the tool says it is not, ask the user to open the
 app's tab.
 
 - Get the token once: `app_request { route: "/csrf-token" }` answers
-  `{"token":"..."}`. Send it on every POST as
-  `headers: { "X-CSRF-Token": "<token>" }`. A `403` means it went stale: fetch
-  a new one and repeat the call.
+  `{"token":"..."}`. Send it on every POST, the ones that only read as well,
+  as `headers: { "X-CSRF-Token": "<token>" }`. A `403` means the header was
+  left out or the token went stale: fetch a new one and repeat the call.
 - Routes are POST with a `json` body unless said otherwise.
 - The user's files are in `data/root/default-user/` in this app's folder ("the
   data folder" below). They are not in git: there is nothing to commit.
@@ -95,11 +95,11 @@ next time the user changes anything. So:
    jq '
      .power_user.personas["Captain.png"] = "Captain"
      | .power_user.persona_descriptions["Captain.png"] = { description: "A retired sea captain, blunt and superstitious.", position: 0, depth: 2, role: 0, lorebook: "", title: "", connections: [] }
-   ' settings.json > /tmp/s.json && cp /tmp/s.json settings.json
+   ' settings.json > ../../settings.next.json
    ```
 
    **Switch** to a persona, or bring the working copy in line after editing
-   the one in use (run it after the edit above, or in the same `jq` call):
+   the one in use (join it to the edit above with `|` when both are wanted):
 
    ```sh
    jq --arg f "Captain.png" '
@@ -111,12 +111,22 @@ next time the user changes anything. So:
      | .power_user.persona_description_depth = ($d.depth // 2)
      | .power_user.persona_description_role = ($d.role // 0)
      | .power_user.persona_description_lorebook = ($d.lorebook // "")
-   ' settings.json > /tmp/s.json && cp /tmp/s.json settings.json
+   ' settings.json > ../../settings.next.json
    ```
-3. At once, `app_request { route: "/csrf-token", reload: true }`, so the page
-   reads the file instead of overwriting it.
-4. Read the value back from `settings.json`. If it is gone, the page saved in
-   between: do steps 2 and 3 again.
+
+   Each writes an edited copy beside the data, not over the file, so two runs
+   do not add up: the second replaces the first. Check the copy before
+   sending it:
+   `jq -e 'has("power_user") and has("oai_settings")' ../../settings.next.json`
+   must answer `true`.
+3. In the very next call, hand the copy to the program and load the page
+   again:
+   `app_request { route: "/api/settings/save", body_file: "apps/<this app's id>/data/settings.next.json", headers: { "X-CSRF-Token": "<token>" }, reload: true }`
+   answers `{"result":"ok"}`. Never write to `settings.json` yourself: the
+   open page keeps the settings in memory and would write its old copy back
+   over the edit.
+4. In a new shell command, read the value back from `settings.json` and
+   remove the copy (`rm ../../settings.next.json`).
 
 Removing a persona is the reverse: delete the picture, then
 `del(.power_user.personas["Captain.png"], .power_user.persona_descriptions["Captain.png"])`,

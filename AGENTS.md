@@ -52,8 +52,9 @@ the file shapes, so nothing has to be worked out from the source:
 What holds for every call:
 
 - Get the token once with `app_request { route: "/csrf-token" }` and send it on
-  every POST as `headers: { "X-CSRF-Token": "<token>" }`. A `403` means it went
-  stale: fetch a new one and repeat the call.
+  every POST, the ones that only read as well, as
+  `headers: { "X-CSRF-Token": "<token>" }`. A `403` means the header was left
+  out or the token went stale: fetch a new one and repeat the call.
 - The open page reads its lists once. Set `reload: true` on the last call of a
   job that added, renamed or removed something. To only refresh the page, call
   `/csrf-token` again with `reload: true`. With no page open there is nothing

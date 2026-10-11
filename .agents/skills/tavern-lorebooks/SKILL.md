@@ -12,9 +12,9 @@ id. The program must be running: if the tool says it is not, ask the user to
 open the app's tab.
 
 - Get the token once: `app_request { route: "/csrf-token" }` answers
-  `{"token":"..."}`. Send it on every POST as
-  `headers: { "X-CSRF-Token": "<token>" }`. A `403` means it went stale: fetch
-  a new one and repeat the call.
+  `{"token":"..."}`. Send it on every POST, the ones that only read as well,
+  as `headers: { "X-CSRF-Token": "<token>" }`. A `403` means the header was
+  left out or the token went stale: fetch a new one and repeat the call.
 - Routes are POST with a `json` body unless said otherwise.
 - The open page reads its list of books once. Set `reload: true` on the last
   call of a job that added or removed a book, or changed one the user may have

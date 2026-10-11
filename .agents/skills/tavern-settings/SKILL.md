@@ -1,6 +1,6 @@
 ---
 name: tavern-settings
-description: Change anything this SillyTavern keeps in its settings file without the page overwriting it - tags on characters, regex scripts, which lorebooks are on everywhere, any option of the page - and take a backup first. Also points to themes, quick replies, backgrounds and groups. Load it before editing settings.json here or when a settings change did not stick.
+description: Change anything this SillyTavern keeps in its settings file without the page overwriting it - the colours of the page and its theme, tags on characters, regex scripts, which lorebooks are on everywhere, any option of the page - and take a backup first. Also points to themes, quick replies, backgrounds and groups. Load it before editing settings.json here or when a settings change did not stick.
 ---
 
 # Settings
@@ -16,35 +16,60 @@ program must be running: if the tool says it is not, ask the user to open the
 app's tab.
 
 - Get the token once: `app_request { route: "/csrf-token" }` answers
-  `{"token":"..."}`. Send it on every POST as
-  `headers: { "X-CSRF-Token": "<token>" }`. A `403` means it went stale: fetch
-  a new one and repeat the call.
+  `{"token":"..."}`. Send it on every POST, the ones that only read as well,
+  as `headers: { "X-CSRF-Token": "<token>" }`. A `403` means the header was
+  left out or the token went stale: fetch a new one and repeat the call.
 - Routes are POST with a `json` body unless said otherwise.
 
-## The rule for editing the file
+## The rule for changing the file
 
-The open page keeps every setting in memory and writes the whole file back the
-next time the user changes anything. An edit made on disk is lost unless the
-page reads the file before that. So, always in this order:
+The open page keeps every setting in memory and writes the whole file back
+whenever it saves. An edit made to `settings.json` on disk is lost when the
+page saves before it has read the file again, and the seconds between an edit
+and a reload are enough for that. So never write to `settings.json` yourself.
+Hand an edited copy to the program and load the page again in the same call:
 
 1. Back up: `/api/settings/make-snapshot` with `{}` (answers 204, the copy
    lands in `backups/` of the data folder).
-2. Edit in the shell, from the data folder, writing a copy first so a failed
-   `jq` cannot empty the file:
+2. In the shell, from the data folder, write the edited copy beside the data,
+   not over the file:
 
    ```sh
-   jq '.power_user.auto_swipe = true' settings.json > /tmp/s.json && cp /tmp/s.json settings.json
+   jq '.power_user.auto_swipe = true' settings.json > ../../settings.next.json \
+     && jq -e 'has("power_user") and has("oai_settings")' ../../settings.next.json > /dev/null && echo ready
    ```
 
-3. At once, `app_request { route: "/csrf-token", reload: true }`. The page
-   reloads and reads the file. What the user had typed is put back.
-4. Read the value back (`jq .power_user.auto_swipe settings.json`). If it is
-   gone, the page saved in between: do steps 2 and 3 again.
+   Go on only when it printed `ready`: a copy cut short would replace every
+   setting with what little is in it.
+3. In the very next call:
 
-Do the whole job in one edit, not one edit per value. Do not fetch
-`/api/settings/get`: it answers with this file plus every preset and is cut
-off. Do not send `/api/settings/save` either: it wants the whole file as its
-body. Never print `secrets.json`.
+   ```
+   app_request {
+     route: "/api/settings/save",
+     body_file: "apps/<this app's id>/data/settings.next.json",
+     headers: { "X-CSRF-Token": "<token>" },
+     reload: true
+   }
+   ```
+
+   It answers `{"result":"ok"}`. The program writes the file and the page loads
+   again at that moment, before its old copy can be written back. What the
+   user had typed is put back. A setting the user changed between steps 2 and
+   3 is not in the copy, so do not put other calls between them.
+4. In a new shell command, read the value back
+   (`jq .power_user.auto_swipe settings.json`) and remove the copy
+   (`rm ../../settings.next.json`).
+
+Do the whole job in one edit, not one edit per value. The examples below show
+only the `jq` program: run each as step 2, then do step 3.
+
+A few seconds after it loads, the page saves the file once by itself, with
+what it just read: a newer time on the file is not a sign that something went
+wrong. Do not watch the file with a loop inside one shell command: a command
+sees a file as it was when it first read it.
+
+Do not fetch `/api/settings/get`: it answers with this file plus every preset
+and is cut off. Never print `secrets.json`.
 
 ## Reading it
 
@@ -93,7 +118,7 @@ jq --arg name "Fantasy" --arg who "Mira.png" '
   (if any(.tags[]; .name == $name) then . else .tags += [{ id: (now * 1000 | floor | tostring), name: $name, color: "" }] end)
   | (.tags[] | select(.name == $name) | .id) as $id
   | .tag_map[$who] = ((.tag_map[$who] // []) + [$id] | unique)
-' settings.json > /tmp/s.json && cp /tmp/s.json settings.json
+' settings.json > ../../settings.next.json
 ```
 
 ## Lorebooks that are always on
@@ -102,13 +127,57 @@ jq --arg name "Fantasy" --arg who "Mira.png" '
 switched on for every chat:
 
 ```sh
-jq '.world_info_settings.world_info.globalSelect |= ((. // []) + ["Book"] | unique)' settings.json > /tmp/s.json && cp /tmp/s.json settings.json
+jq '.world_info_settings.world_info.globalSelect |= ((. // []) + ["Book"] | unique)' settings.json > ../../settings.next.json
 ```
 
 The other numbers there: `world_info_depth` (how many messages are scanned for
 keys), `world_info_budget` (percent of the context the entries may take),
 `world_info_recursive`, `world_info_case_sensitive`,
 `world_info_match_whole_words`.
+
+## Colours of the page
+
+The colours in use are fields of `power_user`, each an `rgba(r, g, b, a)`
+text:
+
+| Field | What it colours | Its name in the page |
+| --- | --- | --- |
+| `blur_tint_color` | panels, drawers, the top bar and the menus | UI Background |
+| `chat_tint_color` | the area the chat is in | Chat Background |
+| `user_mes_blur_tint_color` | the user's messages | User Message Blur Tint |
+| `bot_mes_blur_tint_color` | the character's messages | AI Message Blur Tint |
+| `main_text_color` | text | Main Text |
+| `italics_text_color` | text in italics | Italics Text |
+| `underline_text_color` | underlined text | Underlined Text |
+| `quote_text_color` | text in quotes | Quote Text |
+| `shadow_color` | the shadow behind text | Shadow Color |
+| `border_color` | lines around panels | UI Border |
+
+"The background" of the page as a whole is `blur_tint_color` and
+`chat_tint_color` together. Behind both is a picture, not a colour: see
+"Backgrounds" below.
+
+```sh
+jq '.power_user.blur_tint_color = "rgba(15, 34, 66, 1)" | .power_user.chat_tint_color = "rgba(15, 34, 66, 1)"' settings.json > ../../settings.next.json
+```
+
+A theme (`themes/<Name>.json` in the data folder, the one in use named by
+`power_user.theme`) holds the same fields under the same names, at its top
+level. The page copies them into `power_user` only when the user picks the
+theme in the list, so a change to `power_user` alone is undone the next time
+they pick it. To make it last, change the theme too. Its file is sent whole,
+like the settings:
+
+```sh
+jq '.blur_tint_color = "rgba(15, 34, 66, 1)" | .chat_tint_color = "rgba(15, 34, 66, 1)"' "themes/Dark Lite.json" > ../../theme.next.json
+```
+
+then `app_request { route: "/api/themes/save", body_file: "apps/<this app's id>/data/theme.next.json", headers: { "X-CSRF-Token": "<token>" } }`
+(answers 200). Send the theme first and the settings last, so the one reload
+shows both.
+
+To undo a colour change, put the earlier values back the same way. They are
+in the newest file under `backups/` made before the change.
 
 ## Regex scripts
 
@@ -153,9 +222,8 @@ A script meant for a single character is kept in its card instead, under
 Each has its own files and routes. Read the endpoint file with `read_file`
 before calling one: `node_modules/sillytavern/src/endpoints/<area>.js`.
 
-- **Themes:** `themes/<Name>.json` in the data folder, saved with
-  `/api/themes/save` (`{ "name": "...", ... }`, copy an existing file for the
-  rest). The one in use is `power_user.theme`. Area `themes`.
+- **Themes:** see "Colours of the page" above. A new theme is an existing
+  file with another `name`, sent to `/api/themes/save`. Area `themes`.
 - **Quick replies:** `QuickReplies/<Name>.json`, saved with
   `/api/quick-replies/save`. Area `quick-replies`.
 - **Backgrounds:** pictures in `backgrounds/`, added with
