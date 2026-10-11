@@ -1,0 +1,6 @@
+{
+  "private": true,
+  "dependencies": {
+    "sillytavern": "1.19.0"
+  }
+}

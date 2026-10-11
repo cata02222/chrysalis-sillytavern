@@ -1,0 +1,30 @@
+{
+  "name": "SillyTavern",
+  "version": "1.19.0",
+  "kind": "service",
+  "description": "SillyTavern, run as its own program beside the engine and shown in a tab. Uses the models you already connected.",
+  "service": {
+    "command": [
+      "bun",
+      "start.js",
+      "--port",
+      "{port}",
+      "--dataRoot",
+      "{data}/root",
+      "--configPath",
+      "{data}/config.yaml",
+      "--browserLaunchEnabled",
+      "false"
+    ],
+    "setup": ["bun", "install", "--production", "--ignore-scripts"],
+    "setupOn": ["package.json"],
+    "env": {
+      "MODELS_URL": "{models}",
+      "MODELS_KEY": "{models_key}",
+      "DATA_ROOT": "{data}/root"
+    },
+    "restartOn": ["start.js"],
+    "patchOn": ["extensions"],
+    "reloadOn": ["extensions"]
+  }
+}
