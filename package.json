@@ -1,5 +1,6 @@
 {
   "private": true,
+  "license": "AGPL-3.0-only",
   "dependencies": {
     "sillytavern": "1.19.0"
   }

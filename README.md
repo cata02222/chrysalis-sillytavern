@@ -44,3 +44,9 @@ the app's tab.
 | `start.js` | Links the Chrysalis models and `extensions/`, then starts the server |
 | `extensions/` | Your own SillyTavern extensions |
 | `AGENTS.md`, `.agents/skills/` | What the Chrysalis agent reads to work in this app |
+
+## License
+
+This wrapper is licensed under the GNU Affero General Public License v3.0, see
+[LICENSE](LICENSE). SillyTavern is a separate project under the same license;
+its code is not in this repository and is downloaded from npm at install.
